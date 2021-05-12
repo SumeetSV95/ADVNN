@@ -75,7 +75,7 @@ class Classifier(nn.Module):
         self.fc1 = nn.Linear(dim_z, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 7)
+        self.fc4 = nn.Linear(128, 1)
 
     def forward(self, z):
         x = F.elu(self.fc1(z))
