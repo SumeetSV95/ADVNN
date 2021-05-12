@@ -21,7 +21,7 @@ import modelClasses
 from torchvision import models
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-data_dir = '/Users/sumeet95/Downloads/faceDataset'
+data_dir = '/Users/sumeet95/Downloads/faceDatasetV1'
 train_dir = data_dir + '/train'
 test_dir = data_dir + '/test'
 batch_size = 64
@@ -54,10 +54,19 @@ for param in model.parameters():
 
 # Add on classifier
 model.classifier[6] = nn.Sequential(
-    nn.Linear(4096, 256),
+    nn.Linear(4096, 32),
     nn.ReLU(),
     nn.Dropout(0.4),
-    nn.Linear(256, 7),
+    nn.Linear(32, 32),
+    nn.ReLU(),
+    nn.Dropout(0.3),
+    nn.Linear(32, 32),
+    nn.ReLU(),
+    nn.Dropout(0.3),
+    nn.Linear(32, 32),
+    nn.ReLU(),
+    nn.Dropout(0.3),
+    nn.Linear(32, 2),
     nn.LogSoftmax(dim=1))
 
 model = model.to(device)
@@ -213,7 +222,7 @@ def train(model,
                 # Save the model if validation loss decreases
                 if valid_loss < valid_loss_min:
                     # Save model
-                    torch.save(model.state_dict(), save_file_name)
+                    torch.save(model, save_file_name)
                     # Track improvement
                     epochs_no_improve = 0
                     valid_loss_min = valid_loss
@@ -230,7 +239,7 @@ def train(model,
                         )
 
                         # Load the best state dict
-                        model.load_state_dict(torch.load(save_file_name))
+                        model = torch.load(save_file_name)
                         # Attach the optimizer
                         model.optimizer = optimizer
 
