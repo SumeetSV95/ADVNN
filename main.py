@@ -24,7 +24,7 @@ import modelClasses
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 dim_z = 1024
 EPSILON = 1e-6
-data_dir = '/Users/sumeet95/Downloads/faceDataset'
+data_dir = '/Users/sumeet95/Downloads/faceDatasetV1'
 train_dir = data_dir + '/train'
 test_dir = data_dir + '/test'
 batch_size = 64
@@ -74,7 +74,8 @@ def main():
             z = z_mu + z_sigma * torch.randn(batch_size, dim_z).to(device)
             X_hat = decoder(z)
             y_hat = classifier(z)
-            classify_loss = nn.CrossEntropyLoss()(y_hat, y)
+            classify_loss = -torch.mean(
+                y * torch.log(torch.sigmoid(y_hat)) + (1 - y) * torch.log(1 - torch.sigmoid(y_hat)))
             recon_loss = nn.MSELoss(reduction='sum')(X_hat, X) / batch_size
             kl_loss = torch.mean(0.5 * torch.sum(z_mu ** 2 + z_sigma ** 2 - torch.log(EPSILON + z_sigma ** 2) - 1., 1))
             loss = classify_loss + recon_loss + kl_loss
@@ -93,7 +94,8 @@ def main():
                 z = z_mu + z_sigma * torch.randn(batch_size, dim_z).to(device)
                 X_hat = decoder(z)
                 y_hat = classifier(z)
-                classify_loss = nn.CrossEntropyLoss()(y_hat, y)
+                classify_loss = -torch.mean(
+                    y * torch.log(torch.sigmoid(y_hat)) + (1 - y) * torch.log(1 - torch.sigmoid(y_hat)))
                 recon_loss = nn.MSELoss(reduction='sum')(X_hat, X) / batch_size
                 kl_loss = torch.mean(
                     0.5 * torch.sum(z_mu ** 2 + z_sigma ** 2 - torch.log(EPSILON + z_sigma ** 2) - 1., 1))
@@ -231,6 +233,9 @@ def generate():
     classifier.load_state_dict(torch.load('out/face/classifier.pth'))
     discriminator.load_state_dict(torch.load('out/face/discriminator.pth'))
 
+    f1 = torch.load('vgg.pth')
+    for p in f1.parameters():
+        p.requires_grad = False
     for p in encoder.parameters():
         p.requires_grad = False
 
@@ -246,7 +251,7 @@ def generate():
     X, y = test_img.to(device), test_label.to(device)
     y_hat = torch.from_numpy(np.expand_dims(target_label, 0)).float().to(device)
 
-    X_embedding = facenet(F.interpolate(X, size=(160, 160), mode='bilinear', align_corners=True))
+    y1= f1(X)
 
     z, _ = encoder(X)
     z = Variable(z, requires_grad=True).to(device)
@@ -264,11 +269,11 @@ def generate():
         D = discriminator(z)
         X_hat = decoder(z)
 
-        X_hat_embedding = facenet(F.interpolate(X_hat, size=(160, 160), mode='bilinear', align_corners=True))
+        y1 = f1(X)
 
         # loss
-        J1 = distance(X_embedding, X_hat_embedding)
-        J2 = nn.CrossEntropyLoss()(y2, y_hat)
+        J1 = nn.CrossEntropyLoss()(y1, y)
+        J2 = -torch.mean(y_hat * torch.log(torch.sigmoid(y2)) + (1 - y_hat) * torch.log(1 - torch.sigmoid(y2)))
         J_IT = J2 + 0.01 * torch.mean(1 - torch.sigmoid(D)) + 0.0001 * torch.mean(torch.norm(z, dim=1))
         J_SA = J_IT + k * J1
         k += z_lr * (0.001 * J1.item() - J2.item() + max(J1.item() - J1_hat, 0))
