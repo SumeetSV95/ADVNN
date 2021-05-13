@@ -1,3 +1,5 @@
+
+  
 import matplotlib.pyplot as plt
 import numpy as np
 import PIL
@@ -31,6 +33,14 @@ class CVAE(tf.keras.Model):
             tf.keras.layers.Dense(units=10)
 
         ])
+        self.discriminator = tf.keras.Sequential([
+          tf.keras.layers.InputLayer(input_shape=(latent_dim,)),
+          tf.keras.layers.Dense(units=256, activation='relu'),
+          tf.keras.layers.Dense(units=128, activation='relu'),  
+          tf.keras.layers.Dense(units=64,  activation='relu'),
+          tf.keras.layers.Dense(units=1, activation='relu'),                               
+        ])
+       
 
         self.decoder = tf.keras.Sequential(
             [
@@ -48,6 +58,10 @@ class CVAE(tf.keras.Model):
                     filters=1, kernel_size=3, strides=1, padding='same'),
             ]
         )
+      
+
+       
+
 
     @tf.function
     def sample(self, eps=None):
@@ -129,7 +143,6 @@ def compute_loss(model, x, y):
 @tf.function
 def train_step(model, x, optimizer, y):
     """Executes one training step and returns the loss.
-
   This function computes the loss and gradients, and uses the latter to
   update the model's parameters.
   """
@@ -137,6 +150,9 @@ def train_step(model, x, optimizer, y):
         loss = compute_loss(model, x, y)
     gradients = tape.gradient(loss, model.trainable_variables)
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+
+
+
 
 
 def main():
