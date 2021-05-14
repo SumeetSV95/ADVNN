@@ -34,19 +34,19 @@ valid_datagen = ImageDataGenerator(rescale=1. / 255,
 test_datagen = ImageDataGenerator(rescale=1. / 255
                                   )
 
-train_dataset = train_datagen.flow_from_directory(directory='../input/fer2013/train',
+train_dataset = train_datagen.flow_from_directory(directory='/content/fer2013/train',
                                                   target_size=(48, 48),
                                                   class_mode='categorical',
                                                   subset='training',
                                                   batch_size=64)
 
-valid_dataset = valid_datagen.flow_from_directory(directory='../input/fer2013/train',
+valid_dataset = valid_datagen.flow_from_directory(directory='/content/fer2013/train',
                                                   target_size=(48, 48),
                                                   class_mode='categorical',
                                                   subset='validation',
                                                   batch_size=64)
 
-test_dataset = test_datagen.flow_from_directory(directory='../input/fer2013/test',
+test_dataset = test_datagen.flow_from_directory(directory='/content/fer2013/test',
                                                 target_size=(48, 48),
                                                 class_mode='categorical',
                                                 batch_size=64)
@@ -75,7 +75,7 @@ model.add(Dropout(0.5))
 model.add(Dense(32, kernel_initializer='he_uniform'))
 model.add(BatchNormalization())
 model.add(Activation('relu'))
-model.add(Dense(7, activation='softmax'))
+model.add(Dense(2, activation='softmax'))
 
 # Model Summary
 
@@ -97,7 +97,6 @@ METRICS = [
     tf.keras.metrics.Precision(name='precision'),
     tf.keras.metrics.Recall(name='recall'),
     tf.keras.metrics.AUC(name='auc'),
-    f1_score,
 ]
 
 lrd = ReduceLROnPlateau(monitor='val_loss', patience=20, verbose=1, factor=0.50, min_lr=1e-10)
@@ -108,5 +107,5 @@ es = EarlyStopping(verbose=1, patience=20)
 
 model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=METRICS)
 
-history = model.fit(train_dataset, validation_data=valid_dataset, epochs=5, verbose=1, callbacks=[lrd, mcp, es])
+history = model.fit(train_dataset, validation_data=valid_dataset, epochs=50, verbose=1, callbacks=[lrd, mcp, es])
 model.save("FERModel")
