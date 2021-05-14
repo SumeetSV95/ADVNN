@@ -5,6 +5,7 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 import time
 import sys
+import cv2 as cv
 
 tfd = tfp.distributions
 
@@ -176,14 +177,13 @@ def train_discriminator_step(model, x, optimizer):
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
 
-def computeLossGenretation(model, x, y_hat, y, z, f1, k):
+def computeLossGenretation(model, x, y_hat, y, z, f1, k, epoch):
     lr = 0.0002
     z_lr = 0.005
     J1_hat = 0.01
     y2 = model.classify(z)
     D = model.discriminate(z)
-    X_hat = model.decode(z)
-
+    X_hat = model.decode(z, True)
 
     y1 = f1(X_hat)
     J1 = tf.losses.CategoricalCrossentropy()(y1, y)
@@ -193,14 +193,22 @@ def computeLossGenretation(model, x, y_hat, y, z, f1, k):
 
     k = k + z_lr * (0.001 * J1.numpy() - J2.numpy() + max(J1.numpy() - J1_hat, 0))
     k = max(0, min(k, 0.005))
+    if epoch % 1000 == 0:
+        img = tf.squeeze(X_hat).numpy()
+        img = np.repeat(img[..., np.newaxis], 3, axis=2)
+        print(img.shape)
+        print(img)
+        np.clip(img, 0, 1)
+
+        plt.imsave('attack/mnist/iter-%d.png' % (epoch), img)
     return J_SA, k
 
 
-def trainStepGeneration(model, x, optimizer, y_hat, y, z, f1, k):
+def trainStepGeneration(model, x, optimizer, y_hat, y, z, f1, k, epoch):
     with tf.GradientTape() as tape:
-        loss, k = computeLossGenretation(model, x, y_hat, y, z, f1, k)
+        loss, k = computeLossGenretation(model, x, y_hat, y, z, f1, k, epoch)
     gradients = tape.gradient(loss, z)
-    print(gradients, z)
+    # print(gradients, z)
 
     optimizer.apply_gradients(zip([gradients], [z]))
     return k
@@ -291,19 +299,24 @@ def main():
             targetVal = i + 1
     if targetVal == 10:
         targetVal = 0
+    # print(test_img.shape)
+    plt_img = cv.resize(test_img, (28, 28))
+    # img = np.repeat(test_img.transpose((1, 2, 0)), 3, axis=2)
+    # print(img.shape)
+    plt.imsave('attack/mnist/test.png', plt_img)
     target_label[targetVal] = 1
     test_img = np.expand_dims(test_img, 0)
     test_label = np.expand_dims(test_label, 0)
     target_label = np.expand_dims(target_label, 0)
     X, y = tf.convert_to_tensor(test_img, dtype=tf.float32), tf.convert_to_tensor(test_label, dtype=tf.float32)
     y_hat = tf.convert_to_tensor(target_label, dtype=tf.float32)
-    print(X, y)
-    print(y_hat)
+    # print(X, y)
+    # print(y_hat)
     mean, _ = model.encode(X)
     z = tf.Variable(mean, trainable=True)
     k = 0
     for epoch in range(2):
-        k = trainStepGeneration(model, X, optimizer, y_hat, y, z, f1, k)
+        k = trainStepGeneration(model, X, optimizer, y_hat, y, z, f1, k, epoch)
 
 
 def generate():
