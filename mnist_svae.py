@@ -4,6 +4,7 @@ import PIL
 import tensorflow as tf
 import tensorflow_probability as tfp
 import time
+import sys
 
 tfd = tfp.distributions
 
@@ -175,10 +176,40 @@ def train_discriminator_step(model, x, optimizer):
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
 
+def computeLossGenretation(model, x, y_hat, y, z, f1, k):
+    lr = 0.0002
+    z_lr = 0.005
+    J1_hat = 0.01
+    y2 = model.classify(z)
+    D = model.discriminate(z)
+    X_hat = model.decode(z)
+
+
+    y1 = f1(X_hat)
+    J1 = tf.losses.CategoricalCrossentropy()(y1, y)
+    J2 = tf.losses.CategoricalCrossentropy()(y2, y_hat)
+    J_IT = J2 + 0.01 * tf.reduce_mean(1 - tf.sigmoid(D)) + 0.0001 * tf.reduce_mean(tf.norm(z))
+    J_SA = J_IT + k * J1
+
+    k = k + z_lr * (0.001 * J1.numpy() - J2.numpy() + max(J1.numpy() - J1_hat, 0))
+    k = max(0, min(k, 0.005))
+    return J_SA, k
+
+
+def trainStepGeneration(model, x, optimizer, y_hat, y, z, f1, k):
+    with tf.GradientTape() as tape:
+        loss, k = computeLossGenretation(model, x, y_hat, y, z, f1, k)
+    gradients = tape.gradient(loss, z)
+    print(gradients, z)
+
+    optimizer.apply_gradients(zip([gradients], [z]))
+    return k
+
+
 def main():
     optimizer = tf.keras.optimizers.Adam(1e-4)
     train_dataset, test_dataset = loadData()
-    epochs = 2
+    epochs = 1
     # set the dimensionality of the latent space to a plane for visualization later
     latent_dim = 2
     num_examples_to_generate = 16
@@ -188,6 +219,7 @@ def main():
     random_vector_for_generation = tf.random.normal(
         shape=[num_examples_to_generate, latent_dim])
     model = CVAE(latent_dim)
+
     # generate_and_save_images(model, 0, test_sample)
     bestElbo = float('-inf')
     bestEpoch = -1
@@ -201,7 +233,7 @@ def main():
         for test_x, test_labels in test_dataset:
             loss(compute_loss(model, test_x, test_labels))
         elbo = -loss.result()
-        if elbo>bestElbo:
+        if elbo > bestElbo:
             bestElbo = elbo
             bestEpoch = epoch
             model.save_weights("bestModels/weights_{}.h5".format(epoch))
@@ -210,7 +242,7 @@ def main():
               .format(epoch, elbo, end_time - start_time))
         # generate_and_save_images(model, epoch, test_sample)
     print("loading weights...")
-    #model.load_weights("bestModels/weights_{}.h5".format(bestEpoch))
+    # model.load_weights("bestModels/weights_{}.h5".format(bestEpoch))
 
     print("loading done...")
     for layer in model.encoder.layers:
@@ -219,6 +251,7 @@ def main():
         layer.trainable = False
     for layer in model.classifier.layers:
         layer.trainable = False
+
     bestEpoch = -1
     bestloss = float('inf')
     for epoch in range(1, epochs + 1):
@@ -230,14 +263,56 @@ def main():
         for test_x, test_labels in test_dataset:
             loss(computeLossDiscriminator(model, test_x))
         currLoss = loss.result()
-        if currLoss< bestloss:
+        if currLoss < bestloss:
             bestloss = currLoss
             bestEpoch = epoch
+
             model.save_weights("bestModels/weights_{}.h5".format(epoch))
 
         # display.clear_output(wait=False)
         print('Epoch: {}, Test set ELBO: {}, time elapse for current epoch: {}'
               .format(epoch, currLoss, end_time - start_time))
+    for layer in model.discriminator.layers:
+        layer.trainable = False
+    f1 = tf.keras.models.load_model('MNIST_Model')
+    test_img_index = 5
+    i = 0
+    for x_test, y_test in test_dataset:
+        if i < test_img_index < i + 32:
+            test_img = x_test[test_img_index - i, ...]
+            test_label = y_test[test_img_index - i, ...]
+
+    test_img = test_img.numpy()
+    test_label = test_label.numpy()
+    target_label = np.zeros((10,))
+    targetVal = 0
+    for i, val in enumerate(test_label):
+        if val == 1:
+            targetVal = i + 1
+    if targetVal == 10:
+        targetVal = 0
+    target_label[targetVal] = 1
+    test_img = np.expand_dims(test_img, 0)
+    test_label = np.expand_dims(test_label, 0)
+    target_label = np.expand_dims(target_label, 0)
+    X, y = tf.convert_to_tensor(test_img, dtype=tf.float32), tf.convert_to_tensor(test_label, dtype=tf.float32)
+    y_hat = tf.convert_to_tensor(target_label, dtype=tf.float32)
+    print(X, y)
+    print(y_hat)
+    mean, _ = model.encode(X)
+    z = tf.Variable(mean, trainable=True)
+    k = 0
+    for epoch in range(2):
+        k = trainStepGeneration(model, X, optimizer, y_hat, y, z, f1, k)
+
+
+def generate():
+    optimizer = tf.keras.optimizers.Adam(1e-4)
+    train_dataset, test_dataset = loadData()
+    epochs = 1
+    # set the dimensionality of the latent space to a plane for visualization later
+
+    model = tf.keras.models.load_model('path/to/location')
 
 
 if __name__ == "__main__":
